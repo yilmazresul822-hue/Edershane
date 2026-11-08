@@ -44,6 +44,16 @@ describe("structureQuestion", () => {
   });
 });
 
+describe("okunamadı ayrı durum", () => {
+  it("unreadable, unsupported'tan ayrı döner ve yeniden denenmez", async () => {
+    const f = fake([{ kind: "unreadable", neden: "görsel bulanık" }]);
+    const r = await structureQuestion(f.llm, { text: "" , image: "AAAA" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) { expect(r.unreadable).toContain("bulanık"); expect(r.unsupported).toBeUndefined(); }
+    expect(f.calls()).toBe(1);
+  });
+});
+
 describe("kazanımFor", () => {
   it("türe göre eşler", () => {
     expect(kazanimFor({ kind: "equation", eq: "x=1" }, ["Denklemin derecesi 1"])).toBe(1);

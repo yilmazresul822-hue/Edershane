@@ -59,6 +59,25 @@ describe("yetki", () => {
   });
 });
 
+describe("hata dayanıklılığı", () => {
+  it("beklenmeyen hata JSON + CORS başlığıyla döner (tarayıcıda 'failed to fetch' olmaz)", async () => {
+    const real = globalThis.fetch;
+    globalThis.fetch = (async () => { throw new Error("ağ koptu"); }) as any;
+    const r = await post("/deneme", denemeBody);
+    globalThis.fetch = real;
+    expect(r.status).toBe(500);
+    expect(r.headers.get("access-control-allow-origin")).toBe("https://x.test");
+    expect(((await r.json()) as any).hata).toContain("geçici");
+  });
+  it("Vercel önizleme adresi kabul edilir, yabancı adres edilmez", async () => {
+    const n = mockNet();
+    const ask = (origin: string) => worker.fetch(new Request("https://api.test/yok", { method: "POST", headers: { origin } }), env);
+    expect((await ask("https://edershane-git-main-x.vercel.app")).headers.get("access-control-allow-origin")).toBe("https://edershane-git-main-x.vercel.app");
+    expect((await ask("https://kotu-site.com")).headers.get("access-control-allow-origin")).toBe("https://x.test");
+    n.restore();
+  });
+});
+
 describe("/deneme", () => {
   it("yanlış cevap: ustalık + deneme + yanlış defteri (soru metniyle) yazılır", async () => {
     const n = mockNet();
@@ -101,6 +120,13 @@ describe("/soru/yapilandir", () => {
     n = mockNet({ geminiText: JSON.stringify({ kind: "equation", eq: "2*x+3=7", ozet: "x'i bul", soru_metni: "2x+3=7 ise x?" }) });
     const b: any = await (await post("/soru/yapilandir", { text: "2x+3=7" })).json();
     expect(b.spec.eq).toBe("2*x+3=7");
+    n.restore();
+  });
+  it("okunamayan görsel 'okunamadi' döner (desteklenmiyor değil)", async () => {
+    const n = mockNet({ geminiText: JSON.stringify({ kind: "unreadable", neden: "sayı net değil" }) });
+    const j: any = await (await post("/soru/yapilandir", { text: "", image: "AAAA" })).json();
+    expect(j.okunamadi).toContain("net değil");
+    expect(j.desteklenmiyor).toBeUndefined();
     n.restore();
   });
   it("metin ve görsel yoksa 400", async () => {

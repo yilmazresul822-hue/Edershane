@@ -58,48 +58,59 @@ function parseInput(b: any): TeachInput | string {
     history: b.history, studentSaid: b.studentSaid, answer: b.answer };
 }
 
+function corsFor(origin: string, env: Env) {
+  const list = (env.ALLOWED_ORIGIN ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  // Vercel'in bu projeye ait önizleme adresleri de (edershane-xyz.vercel.app) kabul edilir
+  const ok = list.includes(origin) || /^https:\/\/edershane[a-z0-9-]*\.vercel\.app$/.test(origin);
+  return {
+    "access-control-allow-origin": ok ? origin : (list[0] ?? ""),
+    "access-control-allow-headers": "authorization, content-type",
+    "access-control-allow-methods": "POST, OPTIONS",
+    vary: "origin",
+  };
+}
+
+async function handle(req: Request, env: Env, out: (d: unknown, s?: number) => Response): Promise<Response> {
+  const url = new URL(req.url);
+  if (req.method !== "POST" || !ROUTES.includes(url.pathname)) return out({ hata: "bulunamadı" }, 404);
+
+  const user = await auth(req, env);
+  if (!user) return out({ hata: "giriş gerekli" }, 401);
+  if (limited(user.uid)) return out({ hata: "çok fazla istek, biraz bekle" }, 429);
+
+  if (url.pathname.startsWith("/admin/")) {
+    if (!(await isAdmin(user.token, env))) return out({ hata: "yetkisiz" }, 403);
+  } else if (!(await subscribed(user.uid, user.token, env))) return out({ hata: "abonelik gerekli" }, 402);
+
+  let body: unknown;
+  try { body = await req.json(); } catch { return out({ hata: "JSON okunamadı" }, 400); }
+  const llm = new GeminiLLM(env.GEMINI_API_KEY, env.GEMINI_MODEL);
+
+  if (url.pathname === "/soru/yapilandir") return handleYapilandir(body, llm, out);
+  if (url.pathname === "/konu/anlat") return handleKonu(body, user, llm, env, out);
+  if (url.pathname === "/deneme") return handleDeneme(body, user, env, out);
+  if (url.pathname === "/admin/not-cikar") return handleNotCikar(body, user, llm, env, out);
+  if (url.pathname === "/admin/not-kaydet") return handleNotKaydet(body, user, env, out);
+
+  const input = parseInput(body);
+  if (typeof input === "string") return out({ hata: input }, 400);
+  const notes = await getNotes([input.question, input.studentSaid].filter(Boolean).join(" "), user.token, env);
+  const r = await teach(llm, { ...input, notes });
+  return out({ script: r.script, tries: r.tries, fallback: r.fallback, not_sayisi: notes.length });
+}
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
-    const cors = {
-      "access-control-allow-origin": env.ALLOWED_ORIGIN,
-      "access-control-allow-headers": "authorization, content-type",
-      "access-control-allow-methods": "POST, OPTIONS",
-      vary: "origin",
-    };
+    const cors = corsFor(req.headers.get("origin") ?? "", env);
     const out = (data: unknown, status = 200) =>
       new Response(JSON.stringify(data), { status, headers: { ...cors, "content-type": "application/json" } });
-
     if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
-    const url = new URL(req.url);
-    if (req.method !== "POST" || !ROUTES.includes(url.pathname)) return out({ hata: "bulunamadı" }, 404);
-
-    const user = await auth(req, env);
-    if (!user) return out({ hata: "giriş gerekli" }, 401);
-    if (limited(user.uid)) return out({ hata: "çok fazla istek, biraz bekle" }, 429);
-
-    if (url.pathname.startsWith("/admin/")) {
-      if (!(await isAdmin(user.token, env))) return out({ hata: "yetkisiz" }, 403);
-    } else if (!(await subscribed(user.uid, user.token, env))) return out({ hata: "abonelik gerekli" }, 402);
-
-    let body: unknown;
-    try { body = await req.json(); } catch { return out({ hata: "JSON okunamadı" }, 400); }
-    const llm = new GeminiLLM(env.GEMINI_API_KEY, env.GEMINI_MODEL);
-
-    if (url.pathname === "/soru/yapilandir") return handleYapilandir(body, llm, out);
-    if (url.pathname === "/konu/anlat") return handleKonu(body, user, llm, env, out);
-    if (url.pathname === "/deneme") return handleDeneme(body, user, env, out);
-    if (url.pathname === "/admin/not-cikar") return handleNotCikar(body, user, llm, env, out);
-    if (url.pathname === "/admin/not-kaydet") return handleNotKaydet(body, user, env, out);
-
-    const input = parseInput(body);
-    if (typeof input === "string") return out({ hata: input }, 400);
     try {
-      const notes = await getNotes([input.question, input.studentSaid].filter(Boolean).join(" "), user.token, env);
-      const r = await teach(llm, { ...input, notes });
-      return out({ script: r.script, tries: r.tries, fallback: r.fallback, not_sayisi: notes.length });
+      return await handle(req, env, out);
     } catch (e) {
-      console.error(e);
-      return out({ hata: "öğretmen şu an cevap veremiyor" }, 502);
+      // Yakalanmayan hata tarayıcıda "failed to fetch" olarak görünürdü; artık okunur bir cevap dönüyor
+      console.error("worker hatası:", e);
+      return out({ hata: "Sunucuda geçici bir hata oldu, birkaç saniye sonra tekrar dene." }, 500);
     }
   },
 };

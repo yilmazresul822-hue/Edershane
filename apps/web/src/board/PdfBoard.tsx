@@ -22,12 +22,12 @@ type Props = {
   onQuestion(cropJpeg: string, text: string, at: { x: number; y: number }): void;
 };
 
-function toJpeg(src: HTMLCanvasElement, max = 1024) {
+function toJpeg(src: HTMLCanvasElement, max = 900) {
   const k = Math.min(1, max / Math.max(src.width, src.height));
   const o = document.createElement("canvas");
   o.width = Math.max(1, Math.round(src.width * k)); o.height = Math.max(1, Math.round(src.height * k));
   o.getContext("2d")!.drawImage(src, 0, 0, o.width, o.height);
-  return o.toDataURL("image/jpeg", 0.8);
+  return o.toDataURL("image/jpeg", 0.75);
 }
 
 async function renderPage(p: Pg): Promise<HTMLCanvasElement> {

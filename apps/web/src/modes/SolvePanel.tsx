@@ -62,6 +62,10 @@ export function SolvePanel({ input, solver, board, onPlayer, onReadDone, onNext,
   }, [input]);
 
   function got(r: any) {
+    if (r.okunamadi) {
+      olc("okuma_basarisiz", 1, { kaynak, neden: String(r.okunamadi).slice(0, 120) });
+      return fail("Soruyu net okuyamadım (" + r.okunamadi + "). Soruyu biraz daha yakından, yalnızca soru metnini içine alacak şekilde yeniden seç.");
+    }
     if (r.desteklenmiyor) { olc("desteklenmiyor", 1, { neden: String(r.desteklenmiyor).slice(0, 120) }); return fail(r.desteklenmiyor); }
     setDraft({ spec: r.spec, ozet: r.ozet, soruMetni: r.soru_metni });
     setEdit(r.soru_metni);
@@ -130,8 +134,14 @@ export function SolvePanel({ input, solver, board, onPlayer, onReadDone, onNext,
     setPhase("done");
   }
 
+  // Öğrenci ve biz, sunucuya tam olarak ne gönderildiğini görebilelim
+  const preview = input.kind === "selection"
+    ? <img src={input.crop} alt="Seçtiğin bölge" style={{ maxWidth: "100%", maxHeight: 110, display: "block", border: "1px solid #c9c6b8", borderRadius: 6, marginBottom: 6 }} />
+    : null;
+
   return (
     <div style={card}>
+      {(phase === "confirm" || phase === "problem" || phase === "reading") && preview}
       {phase === "reading" && <p>Soru okunuyor…</p>}
 
       {phase === "confirm" && draft && <>
