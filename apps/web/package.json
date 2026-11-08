@@ -1,0 +1,29 @@
+{
+  "name": "web",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "vite", "build": "vite build", "typecheck": "tsc --noEmit" },
+  "dependencies": {
+    "@edershane/bank-pdf": "*",
+    "@edershane/board-player": "*",
+    "@edershane/command-schema": "*",
+    "@edershane/content-core": "*",
+    "@edershane/geometry-core": "*",
+    "@edershane/teacher-core": "*",
+    "@edershane/voice-core": "*",
+    "@excalidraw/excalidraw": "^0.18.0",
+    "@fontsource/caveat": "^5.0.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "pdfjs-dist": "^4.4.168",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "dejavu-fonts-ttf": "^2.37.3",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0"
+  }
+}

@@ -1,0 +1,10 @@
+[
+  { "metin": "2x + 3 = 7 denkleminin çözüm kümesi nedir?", "beklenen": { "kind": "equation", "eq": "2*x+3=7" } },
+  { "metin": "x² − 5x + 6 = 0 denkleminin kökleri toplamı kaçtır?", "beklenen": { "kind": "equation", "eq": "x^2-5*x+6=0" } },
+  { "metin": "f(x) = x³ + 2x ise f'(1) kaçtır?", "beklenen": { "kind": "derivative", "expr": "x^3+2*x" } },
+  { "metin": "∫(2x)dx integralini hesaplayınız.", "beklenen": { "kind": "integral", "expr": "2*x" } },
+  { "metin": "Kenar uzunlukları 3, 4 ve 5 olan üçgenin alanı kaçtır?", "beklenen": { "kind": "triangle", "ask": "area" } },
+  { "metin": "Merkezi O olan çemberde AB kirişi 8 cm ise...", "beklenen": { "kind": "unsupported" } },
+  { "metin": "sin x = 1/2 denkleminin [0, 2π] aralığındaki çözümleri", "beklenen": { "kind": "unsupported" } },
+  { "metin": "x² − 4 < 0 eşitsizliğinin çözüm kümesi", "beklenen": { "kind": "unsupported" } }
+]

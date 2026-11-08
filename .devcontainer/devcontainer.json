@@ -1,0 +1,7 @@
+{
+  "name": "edershane",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "features": { "ghcr.io/devcontainers/features/python:1": {} },
+  "forwardPorts": [5173],
+  "postCreateCommand": "npm install && pip install sympy pytest"
+}

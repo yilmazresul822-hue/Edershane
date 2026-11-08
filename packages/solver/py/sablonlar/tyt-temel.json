@@ -1,0 +1,60 @@
+[
+  {
+    "id": "lineer-1", "kazanim_id": 1, "zorluk": 0.2,
+    "params": {"a": [2, 9], "b": [-9, 9], "m": [-9, 9]},
+    "derived": {"c": "a*m+b"},
+    "kisitlar": ["b != 0", "m != 0"],
+    "stem": "{a}x{b:s} = {c} denklemini sağlayan x değeri kaçtır?",
+    "spec": {"kind": "equation", "eq": "{a}*x+{b}={c}"},
+    "cevap": {"anahtar": "x"},
+    "yanlislar": [
+      {"ad": "Sabit terimi karşıya atarken işaret hatası", "expr": "(c+b)/a"},
+      {"ad": "Katsayıya bölmeyi unutma", "expr": "c-b"},
+      {"ad": "Bölme yerine çarpma", "expr": "(c-b)*a"},
+      {"ad": "Sonucun işaretini ters alma", "expr": "-(c-b)/a"}
+    ]
+  },
+  {
+    "id": "ikinci-derece-1", "kazanim_id": 2, "zorluk": 0.4,
+    "params": {"a": [1, 3], "p": [-6, 6], "q": [-6, 6]},
+    "derived": {"b": "-a*(p+q)", "c": "a*p*q"},
+    "kisitlar": ["p != q", "b != 0", "c != 0"],
+    "stem": "{a:k}x^2{b:sk}x{c:s} = 0 denkleminin köklerinden büyüğü kaçtır?",
+    "spec": {"kind": "equation", "eq": "{a}*x^2+{b}*x+{c}=0"},
+    "cevap": {"anahtar": "x", "secim": "max"},
+    "yanlislar": [
+      {"ad": "Kökler toplamını kök sanma", "expr": "p+q"},
+      {"ad": "Kökler çarpımını kök sanma", "expr": "p*q"},
+      {"ad": "Küçük kökü seçme", "expr": "(p+q-abs(p-q))/2"},
+      {"ad": "Kökün işaretini ters alma", "expr": "-(p+q+abs(p-q))/2"}
+    ]
+  },
+  {
+    "id": "turev-nokta-1", "kazanim_id": 3, "zorluk": 0.4,
+    "params": {"a": [1, 5], "b": [-8, 8], "p": [1, 4]},
+    "kisitlar": ["b != 0"],
+    "stem": "f(x) = {a:k}x^2{b:sk}x olduğuna göre f'({p}) değeri kaçtır?",
+    "spec": {"kind": "derivative", "expr": "{a}*x^2+{b}*x"},
+    "cevap": {"turev_noktasi": "p"},
+    "yanlislar": [
+      {"ad": "Türev yerine fonksiyon değerini hesaplama", "expr": "a*p^2+b*p"},
+      {"ad": "Birinci dereceden terimin türevini unutma", "expr": "2*a*p"},
+      {"ad": "Üssü düşürmeyi unutma", "expr": "a*p+b"},
+      {"ad": "Sabit katsayı işaret hatası", "expr": "2*a*p-b"}
+    ]
+  },
+  {
+    "id": "ucgen-345", "kazanim_id": 4, "zorluk": 0.3,
+    "params": {"k": [1, 12]},
+    "derived": {"a": "3*k", "b": "4*k", "c": "5*k"},
+    "stem": "Kenar uzunlukları {a}, {b} ve {c} birim olan ABC üçgeninin alanı kaç birimkaredir?",
+    "spec": {"kind": "triangle", "a": "{a}", "b": "{b}", "c": "{c}", "ask": "area"},
+    "cevap": {"anahtar": "Alan"},
+    "yanlislar": [
+      {"ad": "Dik kenarların çarpımı: ½ çarpanını unutma", "expr": "a*b"},
+      {"ad": "Çevreyi alan sanma", "expr": "a+b+c"},
+      {"ad": "Yanlış formül", "expr": "(a+b)*c/2"},
+      {"ad": "Yanlış formül", "expr": "a*b/3"}
+    ]
+  }
+]

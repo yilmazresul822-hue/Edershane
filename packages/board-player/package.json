@@ -1,0 +1,12 @@
+{
+  "name": "@edershane/board-player",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": { "test": "vitest run" },
+  "dependencies": {
+    "@edershane/geometry-core": "*",
+    "@edershane/command-schema": "*"
+  },
+  "devDependencies": { "vitest": "^2.0.0", "typescript": "^5.5.0" }
+}
