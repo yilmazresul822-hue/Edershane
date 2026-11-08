@@ -3,10 +3,10 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
 [vars]
-ALLOWED_ORIGIN = "https://edershane.pages.dev"
+ALLOWED_ORIGIN = "https://edershane.vercel.app"
 GEMINI_MODEL = "gemini-2.0-flash"      # güncel ücretsiz model adını Google AI Studio'dan kontrol edin
 EMBED_MODEL = "gemini-embedding-001"   # aynı şekilde kontrol edin
-SUPABASE_URL = "https://PROJE_KODU.supabase.co"
+SUPABASE_URL = "https://bznqkvogweugungsgdqv.supabase.co"
 NOTSUZ_ANLAT = "0"   # "1": notu olmayan konuyu genel bilgiyle anlatır (yalnızca deneme için)
 
 # Gizli (kodda yok): wrangler secret put GEMINI_API_KEY  /  wrangler secret put SUPABASE_ANON_KEY
