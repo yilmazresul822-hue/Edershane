@@ -1,4 +1,4 @@
-import { FALLBACK, parseJson, type LLM } from "./orchestrate";
+import { FALLBACK, LLMError, parseJson, type LLM } from "./orchestrate";
 import { checkScript, type Script } from "./script";
 import { NOT_KURALI, STIL } from "./prompt";
 
@@ -116,7 +116,7 @@ export async function lessonTurn(llm: LLM, input: LessonInput, maxTries = 3): Pr
   for (let i = 1; i <= maxTries; i++) {
     let raw: unknown;
     try { raw = parseJson(await llm.json(system, user)); }
-    catch (e) { user = lessonUser(input, [`JSON okunamadı: ${(e as Error).message}`]); continue; }
+    catch (e) { if (e instanceof LLMError) throw e; user = lessonUser(input, [`JSON okunamadı: ${(e as Error).message}`]); continue; }
     const res = checkScript(raw, { points: [], level: input.faz === "yoklama" ? 1 : 3, soft: i === maxTries, allow });
     if (res.ok) return { script: res.script, fallback: false };
     user = lessonUser(input, res.errors);

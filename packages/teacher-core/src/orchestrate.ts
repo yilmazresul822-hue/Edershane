@@ -1,6 +1,18 @@
 import { buildSystemPrompt, buildUserPrompt, type TeachInput } from "./prompt";
 import { checkScript, type Script } from "./script";
 
+/** Yapay zeka servisine ulaşma hatası (model kapandı, anahtar yanlış, kota doldu...). Yeniden denemek işe yaramaz. */
+export class LLMError extends Error {
+  constructor(public status: number, message: string) { super(message); this.name = "LLMError"; }
+}
+export function llmMessage(e: unknown): string {
+  const st = e instanceof LLMError ? e.status : 0;
+  if (st === 404) return "Yapay zeka modeli bulunamadı (model adı eski olabilir).";
+  if (st === 400 || st === 401 || st === 403) return "Yapay zeka anahtarı geçersiz ya da yetkisiz.";
+  if (st === 429) return "Yapay zeka kullanım sınırı doldu, biraz bekleyip tekrar dene.";
+  return `Yapay zeka servisi hata verdi (${st || "bağlantı"}).`;
+}
+
 export interface LLM { json(system: string, user: string, imageBase64?: string): Promise<string>; }
 export type TeachResult = { script: Script; tries: number; dropped: string[]; fallback: boolean };
 
@@ -27,6 +39,7 @@ export async function teach(llm: LLM, input: TeachInput, maxTries = 3): Promise<
     try {
       raw = parseJson(await llm.json(system, user));
     } catch (e) {
+      if (e instanceof LLMError) throw e;
       last = [`JSON okunamadı: ${(e as Error).message}`];
       user = buildUserPrompt(input, last);
       continue;

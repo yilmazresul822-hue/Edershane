@@ -1,4 +1,4 @@
-import { structureQuestion, type LLM } from "@edershane/teacher-core";
+import { LLMError, llmMessage, structureQuestion, type LLM } from "@edershane/teacher-core";
 
 export async function handleYapilandir(body: any, llm: LLM, out: (d: unknown, s?: number) => Response) {
   const text = typeof body?.text === "string" ? body.text.slice(0, 2000) : "";
@@ -14,6 +14,6 @@ export async function handleYapilandir(body: any, llm: LLM, out: (d: unknown, s?
     return out({ hata: "Soruyu anlayamadım, metni düzeltip tekrar dene" }, 422);
   } catch (e) {
     console.error(e);
-    return out({ hata: "Soru okunamadı, biraz sonra tekrar dene" }, 502);
+    return out({ hata: e instanceof LLMError ? llmMessage(e) : "Soru okunamadı, biraz sonra tekrar dene" }, 502);
   }
 }

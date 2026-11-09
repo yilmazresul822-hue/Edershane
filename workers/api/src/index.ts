@@ -1,4 +1,4 @@
-import { teach, type TeachInput } from "@edershane/teacher-core";
+import { LLMError, llmMessage, teach, type TeachInput } from "@edershane/teacher-core";
 import { GeminiLLM } from "./llm";
 import { handleDeneme } from "./deneme";
 import { handleNotCikar, handleNotKaydet, isAdmin, getNotes } from "./kutuphane";
@@ -110,6 +110,7 @@ export default {
     } catch (e) {
       // Yakalanmayan hata tarayıcıda "failed to fetch" olarak görünürdü; artık okunur bir cevap dönüyor
       console.error("worker hatası:", e);
+      if (e instanceof LLMError) return out({ hata: llmMessage(e) }, 502);
       return out({ hata: "Sunucuda geçici bir hata oldu, birkaç saniye sonra tekrar dene." }, 500);
     }
   },

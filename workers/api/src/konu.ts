@@ -1,4 +1,4 @@
-import { lessonTurn, type LLM } from "@edershane/teacher-core";
+import { LLMError, llmMessage, lessonTurn, type LLM } from "@edershane/teacher-core";
 import { getNotes } from "./kutuphane";
 import type { Env } from "./index";
 
@@ -34,6 +34,6 @@ export async function handleKonu(body: any, user: { uid: string; token: string }
     return out({ script: r.script, notsuz, fallback: r.fallback });
   } catch (e) {
     console.error(e);
-    return out({ hata: "öğretmen şu an cevap veremiyor" }, 502);
+    return out({ hata: e instanceof LLMError ? llmMessage(e) : "öğretmen şu an cevap veremiyor" }, 502);
   }
 }

@@ -1,4 +1,4 @@
-import { parseJson, type LLM } from "./orchestrate";
+import { LLMError, parseJson, type LLM } from "./orchestrate";
 
 export type SolverSpec =
   | { kind: "equation"; eq: string; var?: string }
@@ -106,7 +106,7 @@ export async function structureQuestion(llm: LLM, input: { text: string; image?:
     const user = `<soru>\n${safe(input.text) || "(metin katmanı yok, görsele bak)"}\n</soru>` +
       (feedback ? `\n\nÖNCEKİ CEVABIN GEÇERSİZDİ: ${feedback}\nDüzeltip JSON'u baştan üret.` : "");
     try { last = validateSpec(parseJson(await llm.json(STRUCT_SYSTEM, user, input.image))); }
-    catch (e) { last = { ok: false, error: `JSON okunamadı: ${(e as Error).message}` }; }
+    catch (e) { if (e instanceof LLMError) throw e; last = { ok: false, error: `JSON okunamadı: ${(e as Error).message}` }; }
     if (last.ok || last.unsupported || last.unreadable) return last;
     feedback = last.error ?? "";
   }

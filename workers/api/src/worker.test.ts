@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import worker, { type Env } from "./index";
+import { rankModels, resetModelCache } from "./llm";
+import { resetEmbedCache } from "./embed";
 
 type Call = { url: string; method: string; body: any };
 const env: Env = {
@@ -8,7 +10,8 @@ const env: Env = {
 };
 
 /** Sahte ağ: Supabase + Gemini. state ile davranış değiştirilir. */
-function mockNet(st: { admin?: boolean; sub?: boolean; token?: boolean; geminiText?: string; notes?: any[]; ustalik?: any[] } = {}) {
+function mockNet(st: { admin?: boolean; sub?: boolean; token?: boolean; geminiText?: string; notes?: any[]; ustalik?: any[]; geminiStatus?: number; deadModels?: string[]; modelList?: any[] } = {}) {
+  resetModelCache(); resetEmbedCache();
   const calls: Call[] = [];
   const real = globalThis.fetch;
   const vec = Array.from({ length: 768 }, (_, i) => (i === 0 ? 1 : 0));
@@ -25,6 +28,9 @@ function mockNet(st: { admin?: boolean; sub?: boolean; token?: boolean; geminiTe
     if (url.includes("/rest/v1/kaynak") && method === "POST") return j([{ id: 7 }], 201);
     if (url.includes("/rest/v1/")) return new Response(null, { status: 201 });
     if (url.includes(":embedContent")) return j({ embedding: { values: vec } });
+    if (url.includes("/v1beta/models?")) return j({ models: st.modelList ?? [] });
+    if (url.includes(":generateContent") && st.deadModels?.includes(/models\/([^:]+):/.exec(url)![1])) return j({ error: { message: "kapandı" } }, 404);
+    if (url.includes(":generateContent") && st.geminiStatus) return j({ error: { message: "model yok" } }, st.geminiStatus);
     if (url.includes(":generateContent")) return j({ candidates: [{ content: { parts: [{ text: st.geminiText ?? "{}" }] } }] });
     return j({}, 404);
   }) as any;
@@ -55,6 +61,58 @@ describe("yetki", () => {
   it("bilinmeyen yol 404; GET reddedilir", async () => {
     const n = mockNet();
     expect((await post("/yok", {})).status).toBe(404);
+    n.restore();
+  });
+});
+
+const M = (name: string, methods = ["generateContent"]) => ({ name: "models/" + name, supportedGenerationMethods: methods });
+describe("model otomatik seçimi", () => {
+  it("sıralama: kararlı > önizleme, normal > lite, yeni > eski; görsel/ses/embedding modelleri elenir", () => {
+    const r = rankModels([M("gemini-2.5-flash"), M("gemini-3.5-flash"), M("gemini-3.8-flash-preview"), M("gemini-3.1-flash-lite"),
+      M("gemini-3.5-flash-image"), M("gemini-3.1-flash-tts-preview"), M("gemini-embedding-001", ["embedContent"]), M("gemini-3.5-pro")]);
+    expect(r).toEqual(["gemini-3.5-flash", "gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-3.8-flash-preview"]);
+  });
+  it("ayarlı model kapandıysa (404) çalışan modele kendisi geçer ve hatırlar", async () => {
+    const spec = JSON.stringify({ kind: "equation", eq: "2*x+3=7", ozet: "x'i bul", soru_metni: "2x+3=7 ise x?" });
+    const n = mockNet({ deadModels: ["g", "gemini-flash-latest"], geminiText: spec,
+      modelList: [M("gemini-2.5-flash"), M("gemini-3.5-flash"), M("gemini-3.5-flash-image")] });
+    const a: any = await (await post("/soru/yapilandir", { text: "2x+3=7" })).json();
+    expect(a.spec.eq).toBe("2*x+3=7");
+    const used = n.calls.filter((c) => c.url.includes(":generateContent")).map((c) => /models\/([^:]+):/.exec(c.url)![1]);
+    expect(used).toEqual(["g", "gemini-flash-latest", "gemini-3.5-flash"]);
+    const before = n.calls.length;
+    await post("/soru/yapilandir", { text: "2x+3=7" });
+    const second = n.calls.slice(before);
+    expect(second.some((c) => c.url.includes("/v1beta/models?"))).toBe(false);
+    expect(second.filter((c) => c.url.includes(":generateContent")).map((c) => /models\/([^:]+):/.exec(c.url)![1])).toEqual(["gemini-3.5-flash"]);
+    n.restore();
+  });
+  it("hiçbir model çalışmıyorsa açık hata mesajı döner", async () => {
+    const n = mockNet({ deadModels: ["g", "gemini-flash-latest", "gemini-3.5-flash"], modelList: [M("gemini-3.5-flash")] });
+    const r = await post("/soru/yapilandir", { text: "2x+3=7" });
+    expect(r.status).toBe(502);
+    expect(((await r.json()) as any).hata).toContain("model");
+    n.restore();
+  });
+});
+
+describe("yapay zeka servisi hatası artık gizlenmiyor", () => {
+  it("model kapandıysa (404) açık mesaj döner, 'anlayamadım' demez", async () => {
+    const n = mockNet({ geminiStatus: 404 });
+    const r = await post("/soru/yapilandir", { text: "2x+3=7" });
+    expect(r.status).toBe(502);
+    expect(((await r.json()) as any).hata).toContain("model");
+    n.restore();
+  });
+  it("öğretmen ve konu anlatım da aynı açık mesajı verir; kota (429) ayrı mesaj", async () => {
+    let n = mockNet({ geminiStatus: 404 });
+    const body = { question: "2x+3=7", points: [], facts: [], steps: [], level: 1, history: [] };
+    expect(((await (await post("/ogretmen/anlat", body)).json()) as any).hata).toContain("model");
+    n.restore();
+    n = mockNet({ geminiStatus: 429 });
+    const r = await post("/konu/anlat", { kazanim_id: 1, konu: "Birinci derece", faz: "yoklama", history: [] });
+    expect(r.status).toBe(502);
+    expect(((await r.json()) as any).hata).toContain("sınırı");
     n.restore();
   });
 });
