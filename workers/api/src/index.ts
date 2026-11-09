@@ -72,6 +72,9 @@ function corsFor(origin: string, env: Env) {
 
 async function handle(req: Request, env: Env, out: (d: unknown, s?: number) => Response): Promise<Response> {
   const url = new URL(req.url);
+  // Cloudflare'de Secret girilmemişse ya da adı yanlış yazılmışsa sebebi açıkça söyle
+  const missing = (["GEMINI_API_KEY", "SUPABASE_ANON_KEY", "SUPABASE_URL"] as const).filter((k) => !(env[k] ?? "").trim());
+  if (missing.length && req.method === "POST") return out({ hata: `Sunucu ayarı eksik: ${missing.join(", ")} (Cloudflare > edershane-api > Settings > Variables and Secrets).` }, 500);
   if (req.method !== "POST" || !ROUTES.includes(url.pathname)) return out({ hata: "bulunamadı" }, 404);
 
   const user = await auth(req, env);

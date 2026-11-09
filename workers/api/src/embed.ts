@@ -12,8 +12,9 @@ async function callEmbed(key: string, model: string, text: string, task: string)
   });
 }
 
-export async function embed(key: string, model: string, text: string,
+export async function embed(rawKey: string, model: string, text: string,
   task: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY"): Promise<number[]> {
+  const key = (rawKey ?? "").trim();
   const first = workingEmbed[model] ?? model;
   let r = await callEmbed(key, first, text, task);
   if (r.status === 404) { // embedding modeli kapandıysa güncel listeden bul

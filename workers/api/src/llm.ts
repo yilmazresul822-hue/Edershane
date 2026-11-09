@@ -32,7 +32,9 @@ export async function listModels(key: string): Promise<ModelInfo[]> {
 }
 
 export class GeminiLLM implements LLM {
-  constructor(private key: string, private model: string) {}
+  private key: string;
+  // Telefondan yapıştırılan anahtarın başında/sonunda kalan boşluk ve satır sonları "geçersiz anahtar" hatası verir
+  constructor(key: string, private model: string) { this.key = (key ?? "").trim(); }
 
   private call(model: string, payload: string) {
     return fetch(`${BASE}/models/${model}:generateContent`, {
@@ -64,9 +66,11 @@ export class GeminiLLM implements LLM {
       }
     }
     if (!r.ok) {
-      const detail = (await r.text().catch(() => "")).slice(0, 300);
-      console.error(`Gemini hatası ${r.status} (model: ${first}):`, detail);
-      throw new LLMError(r.status, `Gemini ${r.status}`);
+      const raw = (await r.text().catch(() => "")).slice(0, 600);
+      let msg = raw.slice(0, 160);
+      try { msg = String(JSON.parse(raw)?.error?.message ?? msg).slice(0, 160); } catch { /* düz metin */ }
+      console.error(`Gemini hatası ${r.status} (model: ${first}):`, raw);
+      throw new LLMError(r.status, `Gemini ${r.status}`, msg.replace(/AIza[\w-]{10,}/g, "[anahtar]"));
     }
     const j: any = await r.json();
     const t = j?.candidates?.[0]?.content?.parts?.[0]?.text;

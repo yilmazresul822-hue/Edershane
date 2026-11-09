@@ -96,6 +96,40 @@ describe("model otomatik seçimi", () => {
   });
 });
 
+describe("anahtar teşhisi", () => {
+  it("Google'ın hata cümlesi kullanıcıya gösterilir (anahtar sızmaz)", async () => {
+    const real = globalThis.fetch;
+    const n = mockNet();
+    const inner = globalThis.fetch;
+    globalThis.fetch = (async (input: any, init: any) => String(input).includes(":generateContent")
+      ? new Response(JSON.stringify({ error: { code: 400, message: "API key not valid. Please pass a valid API key. AIzaSyABCDEFGHIJKLMNOP", status: "INVALID_ARGUMENT" } }), { status: 400 })
+      : inner(input, init)) as any;
+    const r = await post("/soru/yapilandir", { text: "2x+3=7" });
+    const j: any = await r.json();
+    globalThis.fetch = real; n.restore();
+    expect(r.status).toBe(502);
+    expect(j.hata).toContain("reddedildi");
+    expect(j.hata).toContain("API key not valid");
+    expect(j.hata).not.toContain("AIzaSyABCDEFGHIJKLMNOP");
+  });
+  it("Gemini anahtarındaki boşluk ve satır sonu temizlenir", async () => {
+    const n = mockNet({ geminiText: JSON.stringify({ kind: "unreadable", neden: "test" }) });
+    let seen = "";
+    const inner = globalThis.fetch;
+    globalThis.fetch = (async (input: any, init: any) => { if (String(input).includes(":generateContent")) seen = init.headers["x-goog-api-key"]; return inner(input, init); }) as any;
+    await worker.fetch(new Request("https://api.test/soru/yapilandir", { method: "POST", headers: { authorization: "Bearer t", "content-type": "application/json" }, body: JSON.stringify({ text: "x+1=2" }) }), { ...env, GEMINI_API_KEY: "  AIzaTEST123 \n" });
+    expect(seen).toBe("AIzaTEST123");
+    n.restore();
+  });
+  it("Cloudflare'de gizli anahtar eksikse bunu açıkça söyler", async () => {
+    const n = mockNet();
+    const r = await worker.fetch(new Request("https://api.test/deneme", { method: "POST", headers: { authorization: "Bearer t" }, body: "{}" }), { ...env, GEMINI_API_KEY: "" });
+    expect(r.status).toBe(500);
+    expect(((await r.json()) as any).hata).toContain("GEMINI_API_KEY");
+    n.restore();
+  });
+});
+
 describe("yapay zeka servisi hatası artık gizlenmiyor", () => {
   it("model kapandıysa (404) açık mesaj döner, 'anlayamadım' demez", async () => {
     const n = mockNet({ geminiStatus: 404 });
