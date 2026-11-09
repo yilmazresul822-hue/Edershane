@@ -1,4 +1,5 @@
 import "@fontsource/caveat/500.css";
+import "./paper.css";
 import { createRoot } from "react-dom/client";
 import { AuthGate } from "./auth/AuthGate";
 import { Main } from "./App";

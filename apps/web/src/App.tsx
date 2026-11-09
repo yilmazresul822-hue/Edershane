@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import type { BoardPlayer } from "@edershane/board-player";
 import type { SolverSpec } from "@edershane/teacher-core";
-import { PdfBoard, type BoardHandle } from "./board/PdfBoard";
+import { PdfBoard, type BoardHandle, type StartSpec } from "./board/PdfBoard";
+import { Start } from "./Start";
 import { SolvePanel, type SolveInput } from "./modes/SolvePanel";
 import { LessonPanel } from "./modes/LessonPanel";
 import { Notebook } from "./notebook/Notebook";
@@ -22,6 +23,9 @@ export type DeepLink = { spec: SolverSpec; text: string } | { notebook: true };
 export function Main({ session, deepLink }: { session: Session; deepLink?: DeepLink }) {
   const board = useRef<BoardHandle>(null);
   const solver = useMemo(() => new Solver(), []);
+  const [screen, setScreen] = useState<"start" | "board">(deepLink ? "board" : "start");
+  const [startSpec, setStartSpec] = useState<StartSpec>({ kind: "sonsuz" });
+  const [boardKey, setBoardKey] = useState(0);
   const [panel, setPanel] = useState<Panel>("closed");
   const [input, setInput] = useState<SolveInput | null>(null);
   const [player, setPlayer] = useState<BoardPlayer | null>(null);
@@ -52,6 +56,8 @@ export function Main({ session, deepLink }: { session: Session; deepLink?: DeepL
     setInput({ kind: "spec", spec, text, at: board.current?.freeOrigin() ?? { x: 0, y: 0 } });
     setPanel("solve");
   };
+  const begin = (spec: StartSpec) => { setPlayer(null); setStartSpec(spec); setBoardKey((k) => k + 1); setScreen("board"); };
+  const home = () => { close(); setPlayer(null); setScreen("start"); };
 
   if (rol === "veli") {
     return <div><Rapor uid={session.user.id} veli onClose={() => supabase.auth.signOut()} /></div>;
@@ -60,20 +66,33 @@ export function Main({ session, deepLink }: { session: Session; deepLink?: DeepL
   const banner = sub === "veli_bekliyor" ? "Hesabın veli onayı bekliyor."
     : sub === "bitti" ? "Deneme süren bitti. Devam için abonelik gerekli." : "";
   const ok = sub === "aktif";
+  const ad = (session.user.user_metadata?.ad as string | undefined) ?? "";
 
   return (
     <>
-      <PdfBoard ref={board} player={player} selecting={selecting}
-        onQuestion={(crop, text, at) => { if (panel === "pick") { setInput({ kind: "selection", crop, text, at }); setPanel("solve"); } }} />
+      {screen === "start" && (
+        <Start ad={ad}
+          onPdf={(file) => begin({ kind: "pdf", file })}
+          onNotebook={(kind) => begin({ kind })}
+          onWrongBook={() => setPanel("notebook")}
+          onReport={() => setPanel("rapor")}
+          onAdmin={rol === "admin" ? () => setPanel("admin") : undefined}
+          onSignOut={() => supabase.auth.signOut()} />
+      )}
 
-      {panel === "closed" && (
+      {screen === "board" && (
+        <PdfBoard key={boardKey} ref={board} player={player} selecting={selecting} start={startSpec}
+          onQuestion={(crop, text, at) => { if (panel === "pick") { setInput({ kind: "selection", crop, text, at }); setPanel("solve"); } }} />
+      )}
+
+      {screen === "board" && panel === "closed" && (
         <div style={{ position: "fixed", zIndex: 10, left: 8, right: 8, bottom: "calc(64px + env(safe-area-inset-bottom, 0px))", display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+          <button style={btn} onClick={home}>Ana ekran</button>
           <button style={btn} onClick={() => board.current?.openFile()}>Aç</button>
           <button style={btnP} onClick={() => { warm(); setPanel("menu"); }}>Kalem (YZ Öğretmen)</button>
           <button style={btn} onClick={() => setPanel("notebook")}>Defter</button>
           <button style={btn} onClick={() => setPanel("rapor")}>Rapor</button>
           {rol === "admin" && <button style={btn} onClick={() => setPanel("admin")}>Yönetici</button>}
-          <button style={btn} onClick={() => supabase.auth.signOut()}>Çıkış</button>
         </div>
       )}
 
@@ -106,7 +125,7 @@ export function Main({ session, deepLink }: { session: Session; deepLink?: DeepL
           onBooklet={async () => {
             download(await makeBooklet({
               supabaseUrl: import.meta.env.VITE_SUPABASE_URL, anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY,
-              getToken, baseUrl: location.origin, ogrenciAdi: session.user.user_metadata?.ad ?? "Öğrenci",
+              getToken, baseUrl: location.origin, ogrenciAdi: ad || "Öğrenci",
             }));
           }} />
       )}

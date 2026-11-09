@@ -6,11 +6,13 @@ import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import type { BoardPlayer } from "@edershane/board-player";
 import { AiLayer } from "../teacher/AiLayer";
 import { LassoOverlay, type Selection } from "./LassoOverlay";
+import { btn, btnP } from "../ui";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
-const SCALE = 2, GAP = 24, MAX_PAGES = 40;
+const SCALE = 2, GAP = 28, MAX_PAGES = 40, PAGE_W = 595, PAGE_H = 842;
 
-type Pg = { y0: number; w: number; h: number; pdf?: any; bmp?: ImageBitmap };
+export type StartSpec = { kind: "pdf"; file: File } | { kind: "sayfali" } | { kind: "sonsuz" };
+type Pg = { y0: number; w: number; h: number; pdf?: any; bmp?: ImageBitmap; id?: string };
 export type BoardHandle = {
   openFile(): void;
   freeOrigin(): { x: number; y: number };
@@ -19,6 +21,7 @@ export type BoardHandle = {
 type Props = {
   player: BoardPlayer | null;
   selecting: boolean;
+  start: StartSpec;
   onQuestion(cropJpeg: string, text: string, at: { x: number; y: number }): void;
 };
 
@@ -39,13 +42,32 @@ async function renderPage(p: Pg): Promise<HTMLCanvasElement> {
   return cv;
 }
 
-export const PdfBoard = forwardRef<BoardHandle, Props>(function PdfBoard({ player, selecting, onQuestion }, ref) {
+/** Çizgili defter sayfası (krem kâğıt, mavi çizgiler, kırmızı kenar boşluğu çizgisi). */
+async function ruledPage(): Promise<ImageBitmap> {
+  const c = document.createElement("canvas");
+  c.width = PAGE_W * SCALE; c.height = PAGE_H * SCALE;
+  const x = c.getContext("2d")!;
+  x.scale(SCALE, SCALE);
+  x.fillStyle = "#fbf6e8"; x.fillRect(0, 0, PAGE_W, PAGE_H);
+  x.strokeStyle = "#b9d3e6"; x.lineWidth = 1;
+  for (let y = 70; y < PAGE_H - 30; y += 28) { x.beginPath(); x.moveTo(0, y); x.lineTo(PAGE_W, y); x.stroke(); }
+  x.strokeStyle = "#e29a9a"; x.beginPath(); x.moveTo(76, 0); x.lineTo(76, PAGE_H); x.stroke();
+  return createImageBitmap(c);
+}
+
+export const PdfBoard = forwardRef<BoardHandle, Props>(function PdfBoard({ player, selecting, start, onQuestion }, ref) {
   const api = useRef<any>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const fileIn = useRef<HTMLInputElement>(null);
   const pages = useRef<Pg[]>([]);
   const right = useRef(0);
+  const started = useRef(false);
+  const initial = useRef({ appState: { viewBackgroundColor: "#f3f1ea", gridModeEnabled: start.kind === "sonsuz" } });
   const [msg, setMsg] = useState("");
+  const [count, setCount] = useState(0);
+  const [cur, setCur] = useState(0);
+  const [flip, setFlip] = useState({ n: 0, dir: 1 });
+  const spiral = start.kind !== "sonsuz";
 
   useImperativeHandle(ref, () => ({
     openFile: () => fileIn.current?.click(),
@@ -62,18 +84,71 @@ export const PdfBoard = forwardRef<BoardHandle, Props>(function PdfBoard({ playe
     return { scrollX: s.scrollX, scrollY: s.scrollY, zoom: s.zoom.value };
   };
 
+  function onApi(a: any) {
+    api.current = a;
+    if (started.current || !a) return;
+    started.current = true;
+    if (start.kind === "pdf") void loadFile(start.file);
+    else if (start.kind === "sayfali") void newPage(true);
+  }
+
+  /** Sayfaları sahneye ekler (replace: mevcut sahneyi baştan kurar). */
+  async function addPages(list: Pg[], replace: boolean) {
+    const base = replace ? [] : pages.current;
+    let y = base.length ? base[base.length - 1].y0 + base[base.length - 1].h + GAP : 0;
+    const tag = `f${Date.now()}`;
+    const files: any[] = [], skel: any[] = [];
+    for (const [i, p] of list.entries()) {
+      p.y0 = y; y += p.h + GAP;
+      const cv = await renderPage(p);
+      files.push({ id: `${tag}_${i}`, mimeType: "image/jpeg", dataURL: cv.toDataURL("image/jpeg", 0.85), created: Date.now() });
+      cv.width = cv.height = 0; // belleği hemen bırak
+      skel.push({ type: "image", fileId: `${tag}_${i}`, x: 0, y: p.y0, width: p.w, height: p.h, locked: true, status: "saved" });
+    }
+    api.current.addFiles(files);
+    const els = convertToExcalidrawElements(skel as any);
+    list.forEach((p, i) => (p.id = els[i].id));
+    const existing = replace ? [] : api.current.getSceneElements();
+    api.current.updateScene({ elements: [...existing, ...els] });
+    pages.current = [...base, ...list];
+    right.current = Math.max(...pages.current.map((p) => p.w)) + 60;
+    setCount(pages.current.length);
+    return els;
+  }
+
+  function scrollToPage(i: number) {
+    const p = pages.current[i];
+    const el = p && api.current.getSceneElements().find((e: any) => e.id === p.id);
+    if (el) api.current.scrollToContent([el], { fitToViewport: true });
+  }
+
+  async function newPage(first = false) {
+    try {
+      const bmp = await ruledPage();
+      await addPages([{ y0: 0, w: PAGE_W, h: PAGE_H, bmp }], first);
+      const idx = pages.current.length - 1;
+      if (first) { setCur(0); scrollToPage(0); } else go(idx);
+    } catch (e) { console.error(e); setMsg("Sayfa eklenemedi."); }
+  }
+
+  /** Sayfa çevirme: kâğıt yaprağı döner, ortasında sahne yeni sayfaya kayar. */
+  function go(i: number) {
+    const n = pages.current.length;
+    if (i < 0 || i >= n || i === cur) return;
+    setFlip((f) => ({ n: f.n + 1, dir: i > cur ? 1 : -1 }));
+    setTimeout(() => { scrollToPage(i); setCur(i); }, 380);
+  }
+
   async function loadFile(file: File) {
     try {
       setMsg("Açılıyor…");
       const list: Pg[] = [];
       if (file.type === "application/pdf") {
         const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
-        let y = 0;
         for (let i = 1; i <= Math.min(doc.numPages, MAX_PAGES); i++) {
           const pdf = await doc.getPage(i);
           const vp = pdf.getViewport({ scale: 1 });
-          list.push({ y0: y, w: vp.width, h: vp.height, pdf });
-          y += vp.height + GAP;
+          list.push({ y0: 0, w: vp.width, h: vp.height, pdf });
         }
         if (doc.numPages > MAX_PAGES) setMsg(`İlk ${MAX_PAGES} sayfa açıldı.`);
       } else if (file.type.startsWith("image/")) {
@@ -81,19 +156,8 @@ export const PdfBoard = forwardRef<BoardHandle, Props>(function PdfBoard({ playe
         list.push({ y0: 0, w: 1000, h: (bmp.height * 1000) / bmp.width, bmp });
       } else return setMsg("Yalnızca PDF veya resim açılır.");
 
-      const tag = `f${Date.now()}`;
-      const files: any[] = [], skel: any[] = [];
-      for (const [i, p] of list.entries()) {
-        const cv = await renderPage(p);
-        files.push({ id: `${tag}_${i}`, mimeType: "image/jpeg", dataURL: cv.toDataURL("image/jpeg", 0.85), created: Date.now() });
-        cv.width = cv.height = 0; // belleği hemen bırak
-        skel.push({ type: "image", fileId: `${tag}_${i}`, x: 0, y: p.y0, width: p.w, height: p.h, locked: true, status: "saved" });
-      }
-      api.current.addFiles(files);
-      const els = convertToExcalidrawElements(skel as any);
-      api.current.updateScene({ elements: els });
-      pages.current = list;
-      right.current = Math.max(...list.map((p) => p.w)) + 60;
+      const els = await addPages(list, true);
+      setCur(0);
       api.current.scrollToContent(els.slice(0, 1), { fitToViewport: true });
       setMsg((m) => (m === "Açılıyor…" ? "" : m));
     } catch (e) { console.error(e); setMsg("Dosya açılamadı."); }
@@ -135,13 +199,23 @@ export const PdfBoard = forwardRef<BoardHandle, Props>(function PdfBoard({ playe
   }
 
   return (
-    <div ref={wrap} style={{ position: "fixed", inset: 0 }}>
-      <Excalidraw excalidrawAPI={(a: any) => (api.current = a)} />
+    <div ref={wrap} style={{ position: "fixed", inset: 0, left: spiral ? 26 : 0 }}>
+      <Excalidraw excalidrawAPI={onApi} initialData={initial.current} />
       {player && <AiLayer player={player} getView={getView} />}
       {selecting && <LassoOverlay onSelect={handleSelect} />}
+      {flip.n > 0 && <div className="p-leafstage"><div key={flip.n} className={"p-leaf " + (flip.dir > 0 ? "fwd" : "back")} /></div>}
+      {count > 0 && (
+        <div className="p-pages">
+          <button style={btn} disabled={cur === 0} onClick={() => go(cur - 1)}>▲</button>
+          <b style={{ font: "800 19px var(--cond)" }}>{cur + 1}/{count}</b>
+          <button style={btn} disabled={cur >= count - 1} onClick={() => go(cur + 1)}>▼</button>
+          <button style={btnP} onClick={() => void newPage(false)}>+ Sayfa</button>
+        </div>
+      )}
       <input ref={fileIn} type="file" accept="application/pdf,image/*" hidden
         onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void loadFile(f); }} />
-      {msg && <div style={{ position: "absolute", top: 56, left: 8, zIndex: 10, background: "#fffdf7", padding: "6px 10px", borderRadius: 8, fontFamily: "system-ui", fontSize: 14 }}>{msg}</div>}
+      {msg && <div style={{ position: "absolute", top: 56, left: 8, zIndex: 10, background: "#f7e04b", padding: "6px 12px", fontWeight: 600, fontSize: 15, boxShadow: "0 3px 8px rgba(0,0,0,.3)" }}>{msg}</div>}
+      {spiral && <div className="p-spiral" style={{ left: -26 }} />}
     </div>
   );
 });

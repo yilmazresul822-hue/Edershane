@@ -10,7 +10,7 @@ export function AuthGate({ children }: { children: (s: Session) => ReactNode }) 
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => data.subscription.unsubscribe();
   }, []);
-  if (session === undefined) return <p style={{ padding: 24, fontFamily: "system-ui" }}>Yükleniyor…</p>;
+  if (session === undefined) return <p className="p-start">Yükleniyor…</p>;
   return session ? <>{children(session)}</> : <AuthForm />;
 }
 
@@ -47,8 +47,9 @@ function AuthForm() {
   }
 
   return (
-    <div style={{ maxWidth: 380, margin: "0 auto", padding: 20, fontFamily: "system-ui, sans-serif", color: "#1b1f3b" }}>
-      <h1 style={{ fontSize: 24 }}>e-dershane</h1>
+    <div className="p-start" style={{ maxWidth: 400 }}>
+      <h1 className="p-title">e-dershane</h1>
+      <p className="p-sub">{mode === "giris" ? "Tekrar hoş geldin." : "Hesabını birkaç saniyede aç."}</p>
       <div style={{ display: "grid", gap: 10 }}>
         {mode === "kayit" && <>
           <input style={field} placeholder="Adın" value={f.ad} onChange={(e) => set("ad", e.target.value)} />
