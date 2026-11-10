@@ -19,6 +19,9 @@ export function Start({ ad, onPdf, onNotebook, onWrongBook, onReport, onAdmin, o
 
   return (
     <main className="p-start">
+      <div className="p-deco" aria-hidden="true">
+        <div className="p-patch" /><div className="p-dot"><i /></div><div className="p-tri"><i /></div><div className="p-zig"><i /></div>
+      </div>
       <span className="p-label">YKS · LGS · Matematik ve Geometri</span>
       <h1 className="p-title">
         e-<span className="p-circled">dershane

@@ -1,4 +1,5 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import * as EX from "@excalidraw/excalidraw";
 import { Excalidraw, convertToExcalidrawElements, viewportCoordsToSceneCoords } from "@excalidraw/excalidraw";
 import "@excalidraw/excalidraw/index.css";
 import * as pdfjs from "pdfjs-dist";
@@ -7,6 +8,10 @@ import type { BoardPlayer } from "@edershane/board-player";
 import { AiLayer } from "../teacher/AiLayer";
 import { LassoOverlay, type Selection } from "./LassoOverlay";
 import { btn, btnP } from "../ui";
+import { InkLayer, type PenChoice } from "../pens/InkLayer";
+import { PenTray } from "../pens/PenTray";
+import { PenSound } from "../pens/sound";
+import type { Rendered } from "../pens/pens";
 
 pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 const SCALE = 2, GAP = 28, MAX_PAGES = 40, PAGE_W = 595, PAGE_H = 842;
@@ -68,6 +73,21 @@ export const PdfBoard = forwardRef<BoardHandle, Props>(function PdfBoard({ playe
   const [cur, setCur] = useState(0);
   const [flip, setFlip] = useState({ n: 0, dir: 1 });
   const spiral = start.kind !== "sonsuz";
+  const [pen, setPen] = useState<PenChoice | null>(null);
+  const [soundOn, setSoundOn] = useState(true);
+  const sound = useRef<PenSound | null>(null);
+  if (!sound.current) sound.current = new PenSound();
+  sound.current.enabled = soundOn;
+
+  /** Bitmiş dokulu çizgi: Excalidraw'a resim nesnesi olarak eklenir (taşınabilir, silinebilir, geri alınabilir). */
+  function commitInk(r: Rendered) {
+    try {
+      const id = `ink${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
+      api.current.addFiles([{ id, mimeType: "image/png", dataURL: r.canvas.toDataURL("image/png"), created: Date.now() }]);
+      const els = convertToExcalidrawElements([{ type: "image", fileId: id, x: r.x, y: r.y, width: r.w, height: r.h, status: "saved" }] as any);
+      api.current.updateScene({ elements: [...api.current.getSceneElements(), ...els], captureUpdate: (EX as any).CaptureUpdateAction?.IMMEDIATELY });
+    } catch (e) { console.error(e); setMsg("Çizgi eklenemedi."); }
+  }
 
   useImperativeHandle(ref, () => ({
     openFile: () => fileIn.current?.click(),
@@ -202,7 +222,9 @@ export const PdfBoard = forwardRef<BoardHandle, Props>(function PdfBoard({ playe
     <div ref={wrap} style={{ position: "fixed", inset: 0, left: spiral ? 26 : 0 }}>
       <Excalidraw excalidrawAPI={onApi} initialData={initial.current} />
       {player && <AiLayer player={player} getView={getView} />}
+      {pen && !selecting && <InkLayer pen={pen} getView={getView} sound={sound.current} onCommit={commitInk} />}
       {selecting && <LassoOverlay onSelect={handleSelect} />}
+      <PenTray pen={pen} soundOn={soundOn} onPen={setPen} onSound={setSoundOn} />
       {flip.n > 0 && <div className="p-leafstage"><div key={flip.n} className={"p-leaf " + (flip.dir > 0 ? "fwd" : "back")} /></div>}
       {count > 0 && (
         <div className="p-pages">
